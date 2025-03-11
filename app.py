@@ -4,12 +4,21 @@ import io
 import os
 import zipfile
 import tempfile
+import time
 
 # Инициализация session_state для отслеживания состояния
 if "uploaded_files" not in st.session_state:
     st.session_state.uploaded_files = None
 if "processed" not in st.session_state:
     st.session_state.processed = False
+if "custom_size" not in st.session_state:
+    st.session_state.custom_size = False
+if "custom_width" not in st.session_state:
+    st.session_state.custom_width = 1920
+if "custom_height" not in st.session_state:
+    st.session_state.custom_height = 1080
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = "file_uploader_" + str(int(time.time()))
 
 # Функция для проверки, является ли файл изображением
 def is_image_file(file):
@@ -48,11 +57,12 @@ def resize_and_crop(img, target_width, target_height):
         st.error(f"Ошибка при обработке изображения: {e}")
         return None
 
-# Функция очистки
+# Функция для очистки загруженных файлов
 def clear_uploads():
+    # Генерируем новый ключ для компонента загрузки файлов
+    st.session_state.uploader_key = "file_uploader_" + str(int(time.time()))
     st.session_state.uploaded_files = None
     st.session_state.processed = False
-    st.rerun()
 
 # Заголовок приложения
 st.title("Пакетное изменение размеров изображений")
@@ -60,8 +70,13 @@ st.title("Пакетное изменение размеров изображе�
 # Описание приложения
 st.write("Загрузите изображения, выберите желаемое разрешение и нажмите кнопку 'Обработать'.")
 
-# Загрузка изображений
-uploaded_files = st.file_uploader("Выберите изображения", type=["jpg", "jpeg", "png", "bmp", "webp"], accept_multiple_files=True)
+# Загрузка изображений с использованием динамического ключа
+uploaded_files = st.file_uploader(
+    "Выберите изображения", 
+    type=["jpg", "jpeg", "png", "bmp", "webp"], 
+    accept_multiple_files=True,
+    key=st.session_state.uploader_key
+)
 
 # Сохраняем загруженные файлы в session_state
 if uploaded_files:
@@ -71,21 +86,49 @@ if uploaded_files:
 if st.session_state.uploaded_files:
     st.write(f"Загружено файлов: {len(st.session_state.uploaded_files)}")
 
-# Выбор разрешения через радиокнопки (вместо ползунка)
+# Выбор разрешения через радиокнопки 
+resolution_options = [
+    "1600x832 (видео (1i.jpg, 2i.jpg...) и TN)", 
+    "2688x1512 (изображения (1.jpg, 2.jpg...))",
+    "Произвольный размер"
+]
+
 resolution_option = st.radio(
     "Выберите разрешение:",
-    options=[
-        "1600x832 (видео (1i.jpg, 2i.jpg...) и TN)", 
-        "2688x1512 (изображения (1.jpg, 2.jpg...))"
-    ],
+    options=resolution_options,
     index=0
 )
+
+# Установка флага произвольного размера
+st.session_state.custom_size = (resolution_option == "Произвольный размер")
 
 # Получение размеров на основе выбора
 if "1600x832" in resolution_option:
     desired_width, desired_height = 1600, 832
-else:
+elif "2688x1512" in resolution_option:
     desired_width, desired_height = 2688, 1512
+else:
+    # Поля для ввода произвольных размеров
+    col1, col2 = st.columns(2)
+    
+    # Используем числовые поля ввода для ширины и высоты
+    st.session_state.custom_width = col1.number_input(
+        "Ширина (пикселей):", 
+        min_value=100, 
+        max_value=5000, 
+        value=st.session_state.custom_width
+    )
+    
+    st.session_state.custom_height = col2.number_input(
+        "Высота (пикселей):", 
+        min_value=100, 
+        max_value=5000, 
+        value=st.session_state.custom_height
+    )
+    
+    # Устанавливаем желаемые размеры из пользовательского ввода
+    desired_width = st.session_state.custom_width
+    desired_height = st.session_state.custom_height
 
 # Вывод выбранных размеров
 st.write(f"Выбранное разрешение: {desired_width}x{desired_height}")
@@ -97,7 +140,9 @@ col1, col2 = st.columns(2)
 process_button = col1.button("Обработать")
 
 # Кнопка очистки во второй колонке
-clear_button = col2.button("Очистить", on_click=clear_uploads)
+if col2.button("Очистить"):
+    clear_uploads()
+    st.experimental_rerun()
 
 # Обработка изображений при нажатии на кнопку
 if process_button and st.session_state.uploaded_files and not st.session_state.processed:
