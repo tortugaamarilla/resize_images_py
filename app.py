@@ -29,8 +29,21 @@ def is_image_file(file):
         return False
 
 # Функция изменения размера и обрезки изображения
-def resize_and_crop(img, target_width, target_height):
+def resize_and_crop(img, target_width, target_height, keep_original_size=False):
     try:
+        if keep_original_size:
+            # Просто конвертируем изображение без изменения размера
+            if img.mode == 'P':
+                img = img.convert('RGBA')
+                
+            if img.mode in ('RGBA', 'LA'):
+                alpha = img.getchannel('A')
+                bg = Image.new("RGB", img.size, (255, 255, 255))
+                bg.paste(img, mask=alpha)
+                img = bg.convert('RGB')
+                
+            return img
+        
         if img.mode == 'P':
             img = img.convert('RGBA')
 
@@ -90,7 +103,8 @@ if st.session_state.uploaded_files:
 resolution_options = [
     "1600x832 (видео (1i.jpg, 2i.jpg...) и TN)", 
     "2688x1512 (изображения (1.jpg, 2.jpg...))",
-    "Произвольный размер"
+    "Произвольный размер",
+    "Оставить размер без изменения"
 ]
 
 resolution_option = st.radio(
@@ -101,12 +115,15 @@ resolution_option = st.radio(
 
 # Установка флага произвольного размера
 st.session_state.custom_size = (resolution_option == "Произвольный размер")
+keep_original_size = (resolution_option == "Оставить размер без изменения")
 
 # Получение размеров на основе выбора
 if "1600x832" in resolution_option:
     desired_width, desired_height = 1600, 832
 elif "2688x1512" in resolution_option:
     desired_width, desired_height = 2688, 1512
+elif keep_original_size:
+    desired_width, desired_height = 0, 0  # Значения не используются при сохранении оригинального размера
 else:
     # Поля для ввода произвольных размеров
     col1, col2 = st.columns(2)
@@ -131,7 +148,10 @@ else:
     desired_height = st.session_state.custom_height
 
 # Вывод выбранных размеров
-st.write(f"Выбранное разрешение: {desired_width}x{desired_height}")
+if keep_original_size:
+    st.write("Изображения будут сохранены с исходными размерами")
+else:
+    st.write(f"Выбранное разрешение: {desired_width}x{desired_height}")
 
 # Создаем строку с кнопками
 col1, col2 = st.columns(2)
@@ -168,7 +188,7 @@ if process_button and st.session_state.uploaded_files and not st.session_state.p
             image = Image.open(uploaded_file)
             
             # Изменяем размер и обрезаем
-            processed_img = resize_and_crop(image, desired_width, desired_height)
+            processed_img = resize_and_crop(image, desired_width, desired_height, keep_original_size)
             
             if processed_img:
                 # Сохраняем обработанное изображение и имя файла
